@@ -1,9 +1,11 @@
+import ErrorBoundary from './components/ErrorBoundary';
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Calendar, Clock, User, FileText, Activity, Users, Pill, 
   LogOut, Heart, Stethoscope, AlertCircle, CheckCircle, 
   Menu, X, LayoutDashboard, Syringe, ClipboardList, ChevronRight, 
-  Save, Building2, LineChart as ChartIcon, UserCircle, ClipboardCheck, Bell, Keyboard, Lightbulb, UserPlus
+  Save, Building2, LineChart as ChartIcon, UserCircle, ClipboardCheck, 
+  Bell, Keyboard, Lightbulb, UserPlus, AlertTriangle // <--- Agregamos AlertTriangle aquí
 } from 'lucide-react';
 import { 
   usePatients, useAppointments, useTreatments, useVitalSigns, useNurseNotes, initializeApp 
@@ -877,24 +879,64 @@ const NurseDashboard = ({ user, onLogout }) => {
 
 // --- PUNTO DE ENTRADA (APP) ---
 
+// Componente de Notificación Flotante
+const ToastContainer = ({ notifications, remove }) => (
+  <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+    {notifications.map(n => (
+      <div key={n.id} className={`pointer-events-auto min-w-[300px] p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slideIn border ${
+        n.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 
+        n.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+        'bg-white border-gray-200 text-gray-800'
+      }`}>
+        {n.type === 'error' ? <AlertCircle size={20}/> : <CheckCircle size={20}/>}
+        <div className="flex-1 text-sm font-medium">{n.message}</div>
+        <button onClick={() => remove(n.id)}><X size={16}/></button>
+      </div>
+    ))}
+  </div>
+);
+
 const HospitalManagementSystem = () => {
+  // 1. Estados
+  const [notifications, setNotifications] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [appInitialized, setAppInitialized] = useState(false);
 
-  // Inicialización de la BD al arrancar
+  // 2. Función de Notificaciones
+  const notify = (message, type = 'info') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
+  };
+
+  // 3. Función de Login (AQUÍ ES DONDE VA LA VALIDACIÓN)
+  const handleLogin = (user) => {
+    // Validación de seguridad movida AL LUGAR CORRECTO
+    if (user.role === 'patient') {
+      notify('⛔ Acceso denegado: Los pacientes no tienen permiso para acceder a este módulo.', 'error');
+      return; // Detiene el login
+    }
+    
+    // Si pasa la validación, guardamos el usuario
+    setCurrentUser(user);
+    notify(`Bienvenido, ${user.name}`, 'success');
+  };
+
+  // 4. Inicialización
   useEffect(() => {
     const init = async () => {
       try {
         await initializeApp();
-        // Pequeño delay para asegurar que el seeding termine en máquinas lentas
         setTimeout(() => setAppInitialized(true), 1000);
       } catch (err) {
         console.error("Error iniciando app:", err);
+        notify("Error de conexión con la base de datos", "error");
       }
     };
     init();
   }, []);
 
+  // 5. Pantalla de Carga
   if (!appInitialized) return (
     <div className="h-screen flex items-center justify-center bg-hospital-50 flex-col gap-6">
        <Activity size={60} className="text-clinical-primary animate-bounce"/>
@@ -905,14 +947,29 @@ const HospitalManagementSystem = () => {
     </div>
   );
 
+  // 6. Renderizado Principal
   return (
-    <>
-      {!currentUser ? (
-        <LoginForm onLoginSuccess={setCurrentUser} />
-      ) : (
-        <NurseDashboard user={currentUser} onLogout={() => setCurrentUser(null)} />
-      )}
-    </>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-hospital-50">
+        <ToastContainer 
+          notifications={notifications} 
+          remove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} 
+        />
+
+        {!currentUser ? (
+          <LoginForm onLoginSuccess={handleLogin} notify={notify} /> 
+        ) : (
+          <NurseDashboard 
+            user={currentUser} 
+            onLogout={() => {
+              setCurrentUser(null);
+              notify('Sesión cerrada correctamente', 'info');
+            }} 
+            notify={notify} 
+          />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 };
 

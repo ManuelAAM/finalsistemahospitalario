@@ -37,16 +37,22 @@ export default function LoginForm({ onLoginSuccess }) {
       
       onLoginSuccess(user);
     } catch (err) {
-      // Registra intento fallido
-      try {
-       // Use the cedula as username lookup since we don't have the username yet on failure
-        await recordLoginAttempt(cedula.trim(), false, 'web-app');
-      } catch (logError) {
-        console.error('Error logging failed attempt:', logError);
-      }
+      console.error(err);
+      let msg = 'Error al iniciar sesión.';
       
-      // ERR-01: Autenticación fallida
-      setError(formatMessage('ERR_01'));
+      // Detectar tipo de error
+      if (err.message.includes('not found') || err.message.includes('no existe')) {
+        msg = '❌ La cédula no está registrada.';
+      } else if (err.message.includes('password') || err.message.includes('contraseña')) {
+        msg = '❌ Contraseña incorrecta.';
+      } else if (err.message.includes('locked')) {
+        msg = '🔒 Cuenta bloqueada por seguridad.';
+      }
+
+      setError(msg);
+      // Si pasaste la prop notify desde App.jsx:
+      if (notify) notify(msg, 'error');
+      
       setIsLoading(false);
     }
   };

@@ -11,20 +11,19 @@ export function getDb() {
 export async function initDatabase() {
   if (db) return db;
   
-  try {
+  try { // <--- AGREGADO: Bloque Try
     console.log('🔌 Initializing SQLite database...');
-    // Carga la base de datos (se crea en AppData si no existe)
     db = await Database.load('sqlite:hospital.db');
     console.log('✅ Database loaded successfully');
     
-    // Crear tablas y datos semilla
     await createTables();
     await seedInitialData();
     
     return db;
-  } catch (error) {
-    console.error('❌ Failed to initialize database:', error);
-    throw new Error(`Database initialization failed: ${error.message || error}`);
+  } catch (error) { // <--- AGREGADO: Captura de error
+    console.error('❌ Error CRÍTICO de Base de Datos:', error);
+    // Esto lanzará el error hacia la interfaz para que salga el aviso rojo
+    throw new Error(`No se pudo conectar a la base de datos: ${error.message}`);
   }
 }
 
@@ -1913,6 +1912,29 @@ export async function cleanExpiredTokens() {
   }
 }
 
+// ========== NUEVA FUNCIÓN DE TOLERANCIA A FALLOS ==========
+export async function checkPatientHasTreatment(patientId) {
+  const db = await initDatabase();
+  try {
+    // Buscamos si hay al menos un tratamiento activo
+    const treatments = await db.select(
+      "SELECT id FROM treatments WHERE patient_id = ? AND status = 'Activo' LIMIT 1", 
+      [patientId]
+    );
+    
+    if (treatments.length === 0) {
+      return { 
+        hasTreatment: false, 
+        message: '⚠️ Advertencia: Este paciente no tiene tratamiento activo registrado.' 
+      };
+    }
+    return { hasTreatment: true };
+  } catch (e) {
+    console.warn("Error verificando tratamientos:", e);
+    return { hasTreatment: true }; // En caso de error, asumimos true para no bloquear
+  }
+}
+
 /**
  * Obtiene todas las órdenes de alta activas
  */
@@ -1930,5 +1952,997 @@ export async function getAllActiveDischargeOrders() {
   } catch (error) {
     console.error('Error obteniendo órdenes de alta:', error);
     return [];
+  }
+}
+
+// ========== FUNCIONES GETALL FALTANTES ==========
+
+/**
+ * Obtiene todos los usuarios
+ */
+export async function getAllUsers() {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM users ORDER BY name ASC');
+  } catch (error) {
+    console.error('Error obteniendo usuarios:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todos los pacientes
+ */
+export async function getAllPatients() {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM patients ORDER BY id DESC');
+  } catch (error) {
+    console.error('Error obteniendo pacientes:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todas las citas/appointments
+ */
+export async function getAllAppointments() {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM appointments ORDER BY date DESC');
+  } catch (error) {
+    console.error('Error obteniendo citas:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todas las salas/rooms
+ */
+export async function getAllRooms() {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM rooms ORDER BY room_number ASC');
+  } catch (error) {
+    console.error('Error obteniendo salas:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene los usuarios por rol específico
+ */
+export async function getUsersByRole(role) {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM users WHERE role = ? ORDER BY name ASC', [role]);
+  } catch (error) {
+    console.error(`Error obteniendo ${role}s:`, error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todas las prescripciones
+ */
+export async function getAllPrescriptions() {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM prescriptions ORDER BY prescribed_date DESC');
+  } catch (error) {
+    console.error('Error obteniendo prescripciones:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene prescripciones por ID de paciente
+ */
+export async function getPrescriptionsByPatientId(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      'SELECT * FROM prescriptions WHERE patient_id = ? ORDER BY prescribed_date DESC',
+      [patientId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo prescripciones del paciente:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene prescripciones activas
+ */
+export async function getActivePrescriptions() {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      'SELECT * FROM prescriptions WHERE status = "Active" ORDER BY prescribed_date DESC'
+    );
+  } catch (error) {
+    console.error('Error obteniendo prescripciones activas:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todos los signos vitales
+ */
+export async function getAllVitalSigns() {
+  const db = await initDatabase();
+  try {
+    return await db.select('SELECT * FROM vital_signs ORDER BY date DESC');
+  } catch (error) {
+    console.error('Error obteniendo signos vitales:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene signos vitales por ID de paciente
+ */
+export async function getVitalSignsByPatientId(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      'SELECT * FROM vital_signs WHERE patient_id = ? ORDER BY date DESC',
+      [patientId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo signos vitales del paciente:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene el historial médico de un paciente
+ */
+export async function getMedicalHistoryByPatientId(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      'SELECT * FROM medical_history WHERE patient_id = ? ORDER BY date DESC',
+      [patientId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo historial médico:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene pruebas de laboratorio por ID de paciente
+ */
+export async function getLabTestsByPatientId(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      'SELECT * FROM lab_tests WHERE patient_id = ? ORDER BY date DESC',
+      [patientId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo pruebas de laboratorio:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todas las notificaciones
+ */
+export async function getAllNotifications(userId = null) {
+  const db = await initDatabase();
+  try {
+    if (userId) {
+      return await db.select(
+        'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+      );
+    }
+    return await db.select('SELECT * FROM notifications ORDER BY created_at DESC');
+  } catch (error) {
+    console.error('Error obteniendo notificaciones:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene notificaciones no leídas
+ */
+export async function getUnreadNotifications(userId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      'SELECT * FROM notifications WHERE user_id = ? AND is_read = 0 ORDER BY created_at DESC',
+      [userId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo notificaciones no leídas:', error);
+    return [];
+  }
+}
+
+/**
+ * Elimina un usuario
+ */
+export async function deleteUser(userId) {
+  const db = await initDatabase();
+  try {
+    await db.execute('DELETE FROM users WHERE id = ?', [userId]);
+    console.log(`✅ Usuario ${userId} eliminado`);
+    return true;
+  } catch (error) {
+    console.error('Error eliminando usuario:', error);
+    throw error;
+  }
+}
+
+/**
+ * Desactiva un usuario
+ */
+export async function deactivateUser(userId) {
+  const db = await initDatabase();
+  try {
+    await db.execute('UPDATE users SET is_active = 0 WHERE id = ?', [userId]);
+    console.log(`✅ Usuario ${userId} desactivado`);
+    return true;
+  } catch (error) {
+    console.error('Error desactivando usuario:', error);
+    throw error;
+  }
+}
+
+// ========== FUNCIONES DE TRASLADOS ==========
+
+/**
+ * Agrega un nuevo traslado de paciente
+ */
+export async function addPatientTransfer(transferData) {
+  const db = await initDatabase();
+  try {
+    await db.execute(
+      `INSERT INTO patient_transfers (
+        patient_id, from_floor, from_area, from_room, from_bed,
+        to_floor, to_area, to_room, to_bed,
+        transfer_date, transfer_time, reason, transferred_by, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        transferData.patient_id,
+        transferData.from_floor,
+        transferData.from_area,
+        transferData.from_room,
+        transferData.from_bed,
+        transferData.to_floor,
+        transferData.to_area,
+        transferData.to_room,
+        transferData.to_bed,
+        transferData.transfer_date,
+        transferData.transfer_time,
+        transferData.reason,
+        transferData.transferred_by,
+        transferData.notes || ''
+      ]
+    );
+    console.log(`✅ Traslado registrado para paciente ${transferData.patient_id}`);
+    return true;
+  } catch (error) {
+    console.error('Error al agregar traslado:', error);
+    throw error;
+  }
+}
+
+/**
+ * Obtiene todos los traslados de un paciente
+ */
+export async function getTransfersByPatientId(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      `SELECT * FROM patient_transfers WHERE patient_id = ? ORDER BY transfer_date DESC`,
+      [patientId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo traslados:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todos los traslados
+ */
+export async function getAllTransfers() {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      `SELECT pt.*, p.name as patient_name FROM patient_transfers pt
+       JOIN patients p ON pt.patient_id = p.id
+       ORDER BY pt.transfer_date DESC`
+    );
+  } catch (error) {
+    console.error('Error obteniendo traslados:', error);
+    return [];
+  }
+}
+
+// ========== FUNCIONES DE HORARIOS/SHIFTS ==========
+
+/**
+ * Obtiene los turnos de un usuario (enfermero)
+ */
+export async function getShiftsByUserId(userId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      `SELECT * FROM shifts WHERE user_id = ? ORDER BY date DESC`,
+      [userId]
+    );
+  } catch (error) {
+    console.error('Error obteniendo turnos:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene los turnos de hoy
+ */
+export async function getTodayShifts() {
+  const db = await initDatabase();
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    return await db.select(
+      `SELECT s.*, u.name FROM shifts s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.date = ? ORDER BY s.start_time ASC`,
+      [today]
+    );
+  } catch (error) {
+    console.error('Error obteniendo turnos de hoy:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todos los turnos
+ */
+export async function getAllShifts() {
+  const db = await initDatabase();
+  try {
+    return await db.select(
+      `SELECT s.*, u.name FROM shifts s
+       JOIN users u ON s.user_id = u.id
+       ORDER BY s.date DESC, s.start_time ASC`
+    );
+  } catch (error) {
+    console.error('Error obteniendo turnos:', error);
+    return [];
+  }
+}
+
+/**
+ * TRATAMIENTOS NO FARMACOLÓGICOS - FUNCIONES CRUD
+ * Para registrar curaciones, nebulizaciones, fluidoterapia, etc.
+ */
+
+/**
+ * Agrega un tratamiento no farmacológico
+ * @param {Object} treatmentData - { patient_id, nurse_id, nurse_name, treatment_type, description, time_start, time_end? }
+ * @returns {Promise} Resultado de inserción
+ */
+export async function addNonPharmacologicalTreatment(treatmentData) {
+  const db = await initDatabase();
+  try {
+    const {
+      patient_id,
+      nurse_id,
+      nurse_name,
+      treatment_type,
+      description,
+      time_start,
+      time_end = null
+    } = treatmentData;
+
+    const now = new Date().toISOString();
+
+    await db.execute(`
+      INSERT INTO non_pharmacological_treatments (
+        patient_id, nurse_id, nurse_name, treatment_type, 
+        description, time_start, time_end, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      patient_id,
+      nurse_id,
+      nurse_name,
+      treatment_type,
+      description,
+      time_start,
+      time_end,
+      now
+    ]);
+
+    console.log(`✅ Tratamiento no farmacológico registrado: ${treatment_type}`);
+    return { success: true, message: 'Tratamiento registrado correctamente' };
+  } catch (error) {
+    console.error('Error registrando tratamiento no farmacológico:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Obtiene tratamientos no farmacológicos por paciente
+ * @param {number} patientId - ID del paciente
+ * @returns {Promise<Array>} Lista de tratamientos
+ */
+export async function getNonPharmacologicalTreatmentsByPatientId(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT * FROM non_pharmacological_treatments
+      WHERE patient_id = ?
+      ORDER BY created_at DESC
+    `, [patientId]);
+  } catch (error) {
+    console.error('Error obteniendo tratamientos no farmacológicos:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene todos los tratamientos no farmacológicos
+ * @returns {Promise<Array>} Lista de todos los tratamientos
+ */
+export async function getAllNonPharmacologicalTreatments() {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT * FROM non_pharmacological_treatments
+      ORDER BY created_at DESC
+    `);
+  } catch (error) {
+    console.error('Error obteniendo todos los tratamientos:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene tratamientos no farmacológicos por tipo
+ * @param {string} treatmentType - Tipo de tratamiento (curation, nebulization, etc.)
+ * @returns {Promise<Array>} Lista filtrada
+ */
+export async function getNonPharmacologicalTreatmentsByType(treatmentType) {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT * FROM non_pharmacological_treatments
+      WHERE treatment_type = ?
+      ORDER BY created_at DESC
+    `, [treatmentType]);
+  } catch (error) {
+    console.error('Error filtrando tratamientos por tipo:', error);
+    return [];
+  }
+}
+
+/**
+ * Actualiza un tratamiento no farmacológico
+ * @param {number} treatmentId - ID del tratamiento
+ * @param {Object} updateData - Datos a actualizar
+ * @returns {Promise} Resultado de actualización
+ */
+export async function updateNonPharmacologicalTreatment(treatmentId, updateData) {
+  const db = await initDatabase();
+  try {
+    const { description, time_end, treatment_type } = updateData;
+    
+    const updates = [];
+    const values = [];
+
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description);
+    }
+    if (time_end !== undefined) {
+      updates.push('time_end = ?');
+      values.push(time_end);
+    }
+    if (treatment_type !== undefined) {
+      updates.push('treatment_type = ?');
+      values.push(treatment_type);
+    }
+
+    if (updates.length === 0) {
+      return { success: true, message: 'Sin cambios' };
+    }
+
+    values.push(treatmentId);
+
+    await db.execute(`
+      UPDATE non_pharmacological_treatments
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `, values);
+
+    console.log(`✅ Tratamiento actualizado: ID ${treatmentId}`);
+    return { success: true, message: 'Tratamiento actualizado correctamente' };
+  } catch (error) {
+    console.error('Error actualizando tratamiento:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Obtiene tratamientos de un enfermero en una fecha
+ * @param {number} nurseId - ID del enfermero
+ * @param {string} date - Fecha (YYYY-MM-DD)
+ * @returns {Promise<Array>} Tratamientos del día
+ */
+export async function getNurseNonPharmacologicalTreatmentsByDate(nurseId, date) {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT * FROM non_pharmacological_treatments
+      WHERE nurse_id = ? AND DATE(created_at) = ?
+      ORDER BY time_start ASC
+    `, [nurseId, date]);
+  } catch (error) {
+    console.error('Error obteniendo tratamientos del enfermero:', error);
+    return [];
+  }
+}
+
+/**
+ * FUNCIONES MEJORADAS PARA PACIENTES ASIGNADOS AL ENFERMERO
+ */
+
+/**
+ * Obtiene pacientes asignados a un enfermero CON DETALLES COMPLETOS
+ * @param {number} nurseId - ID del enfermero
+ * @returns {Promise<Array>} Pacientes con ubicación y estado
+ */
+export async function getNurseAssignedPatientsWithDetails(nurseId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT 
+        p.id,
+        p.name,
+        p.curp,
+        p.age,
+        p.blood_type,
+        p.gender,
+        p.triage_level,
+        p.room,
+        p.primary_doctor,
+        p.diagnosis,
+        p.status,
+        npa.assigned_at,
+        npa.shift_type,
+        npa.notes,
+        r.floor as room_floor,
+        r.area as room_area,
+        r.bed_number
+      FROM nurse_patient_assignments npa
+      JOIN patients p ON npa.patient_id = p.id
+      LEFT JOIN rooms r ON p.room = r.room_number
+      WHERE npa.nurse_id = ? AND npa.status = 'active'
+      ORDER BY p.room ASC
+    `, [nurseId]);
+  } catch (error) {
+    console.error('Error obteniendo pacientes asignados con detalles:', error);
+    return [];
+  }
+}
+
+/**
+ * FUNCIONES PARA REGISTRO DE MEDICAMENTOS
+ */
+
+/**
+ * Registra administración de medicamento (solo hora, más simple)
+ * @param {Object} adminData - { patient_id, nurse_id, medication_id, prescription_id, administration_time, notes? }
+ * @returns {Promise} Resultado
+ */
+export async function recordMedicationAdministration(adminData) {
+  const db = await initDatabase();
+  try {
+    const {
+      patient_id,
+      nurse_id,
+      medication_id,
+      prescription_id,
+      administration_time,
+      notes = ''
+    } = adminData;
+
+    const now = new Date().toISOString();
+
+    // Buscar si existe tabla medication_administration, si no usar otra
+    // Por ahora registramos en dispensation
+    await db.execute(`
+      INSERT INTO pharmacy_dispensation (
+        patient_id, medication_id, nurse_id, 
+        quantity, dispensed_time, notes, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      patient_id,
+      medication_id,
+      nurse_id,
+      1, // Cantidad por defecto
+      administration_time,
+      `Administración: ${notes}`,
+      'administered'
+    ]);
+
+    console.log(`✅ Medicamento administrado al paciente ${patient_id}`);
+    return { success: true, message: 'Medicamento registrado como administrado' };
+  } catch (error) {
+    console.error('Error registrando administración de medicamento:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Obtiene historial de medicamentos administrados a un paciente
+ * @param {number} patientId - ID del paciente
+ * @returns {Promise<Array>} Historial
+ */
+export async function getMedicationAdministrationHistory(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT * FROM pharmacy_dispensation
+      WHERE patient_id = ? AND status = 'administered'
+      ORDER BY dispensed_time DESC
+    `, [patientId]);
+  } catch (error) {
+    console.error('Error obteniendo historial de medicamentos:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene medicamentos pendientes de administración para un paciente
+ * @param {number} patientId - ID del paciente
+ * @returns {Promise<Array>} Medicamentos pendientes
+ */
+export async function getPendingMedicationAdministration(patientId) {
+  const db = await initDatabase();
+  try {
+    return await db.select(`
+      SELECT p.*, u.name as doctor_name
+      FROM prescriptions p
+      LEFT JOIN users u ON p.doctor_id = u.id
+      WHERE p.patient_id = ? AND p.status = 'active'
+      AND (p.next_administration IS NULL OR p.next_administration <= ?)
+      ORDER BY p.frequency ASC
+    `, [patientId, new Date().toISOString()]);
+  } catch (error) {
+    console.error('Error obteniendo medicamentos pendientes:', error);
+    return [];
+  }
+}
+
+// ========== VALIDACIONES Y SEGURIDAD (10 Puntos) ==========
+
+/**
+ * 1. INTEGRIDAD DEL EXPEDIENTE (NOM-004)
+ * Previene eliminación de notas médicas - Solo marca como archivado
+ */
+export async function preventNoteDelection(noteId) {
+  const db = await initDatabase();
+  try {
+    // No permitir eliminación física, solo marcar como archivado
+    const note = await db.select(
+      'SELECT * FROM nurse_notes WHERE id = ?',
+      [noteId]
+    );
+
+    if (!note || note.length === 0) {
+      return { allowed: false, reason: 'Nota no encontrada' };
+    }
+
+    // Si la nota existe, retornar que NO se puede eliminar
+    return {
+      allowed: false,
+      reason: '❌ PROHIBIDO: No se pueden eliminar notas médicas (NOM-004). Se marcarán como archivadas.',
+      noteId: note[0].id,
+      archiveOption: true
+    };
+  } catch (error) {
+    console.error('Error verificando integridad:', error);
+    return { allowed: false, reason: 'Error en validación' };
+  }
+}
+
+/**
+ * 2. VALIDACIÓN DE SIGNOS VITALES
+ * Verifica que valores estén en rangos fisiológicos posibles
+ */
+export async function validateVitalSignsRange(vitals) {
+  const validation = {
+    isValid: true,
+    errors: [],
+    warnings: []
+  };
+
+  // Rango: 35-42°C (Temperatura)
+  if (vitals.temperature < 35 || vitals.temperature > 42) {
+    validation.isValid = false;
+    validation.errors.push(`Temperatura ${vitals.temperature}°C está FUERA DE RANGO (35-42°C)`);
+  }
+
+  // Rango: 60-200 lpm (Frecuencia Cardíaca)
+  if (vitals.heartRate < 40 || vitals.heartRate > 200) {
+    validation.isValid = false;
+    validation.errors.push(`FC ${vitals.heartRate} lpm está FUERA DE RANGO (40-200)`);
+  }
+
+  // Rango: 8-60 rpm (Frecuencia Respiratoria)
+  if (vitals.respiratoryRate < 8 || vitals.respiratoryRate > 60) {
+    validation.isValid = false;
+    validation.errors.push(`FR ${vitals.respiratoryRate} rpm está FUERA DE RANGO (8-60)`);
+  }
+
+  // Rango: 40-250 mmHg sistólica (PA)
+  const [systolic, diastolic] = vitals.bloodPressure.split('/').map(Number);
+  if (systolic < 40 || systolic > 250 || diastolic < 20 || diastolic > 150) {
+    validation.isValid = false;
+    validation.errors.push(`PA ${vitals.bloodPressure} mmHg está FUERA DE RANGO`);
+  }
+
+  return validation;
+}
+
+/**
+ * 3. PRIVACIDAD DE ASIGNACIÓN
+ * Enfermero solo ve pacientes de su turno y piso
+ */
+export async function validateNursePatientAccess(nurseId, patientId) {
+  const db = await initDatabase();
+  try {
+    // Verificar que el paciente esté asignado al enfermero en su turno
+    const assignment = await db.select(`
+      SELECT npa.*, p.room, r.floor
+      FROM nurse_patient_assignments npa
+      JOIN patients p ON npa.patient_id = p.id
+      LEFT JOIN rooms r ON p.room = r.room_number
+      WHERE npa.nurse_id = ? AND npa.patient_id = ? AND npa.status = 'active'
+    `, [nurseId, patientId]);
+
+    if (assignment.length === 0) {
+      return {
+        allowed: false,
+        reason: '❌ ACCESO DENEGADO: Este paciente no está asignado a tu turno o piso'
+      };
+    }
+
+    return {
+      allowed: true,
+      assignment: assignment[0]
+    };
+  } catch (error) {
+    console.error('Error validando acceso:', error);
+    return { allowed: false, reason: 'Error en validación de acceso' };
+  }
+}
+
+/**
+ * 4. DISPONIBILIDAD DE CAMAS
+ * No permitir asignar paciente a cama ocupada
+ */
+export async function validateBedAvailability(roomNumber) {
+  const db = await initDatabase();
+  try {
+    const room = await db.select(`
+      SELECT occupied_beds, bed_count FROM rooms WHERE room_number = ?
+    `, [roomNumber]);
+
+    if (!room || room.length === 0) {
+      return { available: false, reason: 'Habitación no encontrada' };
+    }
+
+    if (room[0].occupied_beds >= room[0].bed_count) {
+      return {
+        available: false,
+        reason: `❌ No hay camas disponibles en la habitación ${roomNumber}`,
+        occupancy: `${room[0].occupied_beds}/${room[0].bed_count}`
+      };
+    }
+
+    return {
+      available: true,
+      occupancy: `${room[0].occupied_beds}/${room[0].bed_count}`
+    };
+  } catch (error) {
+    console.error('Error validando cama:', error);
+    return { available: false, reason: 'Error en validación' };
+  }
+}
+
+/**
+ * 5. ALERTA DE ALERGIAS
+ * Advertir si se medica algo a lo que el paciente es alérgico
+ */
+export async function checkMedicationAllergy(patientId, medicationName) {
+  const db = await initDatabase();
+  try {
+    // Buscar alergias del paciente en medical_history
+    const allergies = await db.select(`
+      SELECT * FROM medical_history
+      WHERE patient_id = ? AND type = 'allergy'
+    `, [patientId]);
+
+    const matchingAllergy = allergies.find(a =>
+      a.description && a.description.toLowerCase().includes(medicationName.toLowerCase())
+    );
+
+    if (matchingAllergy) {
+      return {
+        hasAllergy: true,
+        warning: `⚠️ ALERTA: El paciente es ALÉRGICO a ${matchingAllergy.description}`,
+        allergyRecord: matchingAllergy
+      };
+    }
+
+    return { hasAllergy: false };
+  } catch (error) {
+    console.error('Error verificando alergias:', error);
+    return { hasAllergy: false, warning: 'No se pudieron verificar alergias' };
+  }
+}
+
+/**
+ * 6. UNICIDAD DE PACIENTE
+ * Evitar duplicidad usando CURP único
+ */
+export async function validatePatientUniqueness(curp) {
+  const db = await initDatabase();
+  try {
+    const existing = await db.select(
+      'SELECT id, name FROM patients WHERE curp = ?',
+      [curp]
+    );
+
+    if (existing.length > 0) {
+      return {
+        unique: false,
+        warning: `❌ PACIENTE DUPLICADO: Ya existe registro con CURP ${curp}`,
+        existingPatient: existing[0]
+      };
+    }
+
+    return { unique: true };
+  } catch (error) {
+    console.error('Error validando unicidad:', error);
+    return { unique: false, warning: 'Error en validación' };
+  }
+}
+
+/**
+ * 7. BLOQUEO DE EDICIÓN POR TIEMPO
+ * Notas solo editables dentro de las primeras 24 horas
+ */
+export async function validateNoteEditTime(noteId) {
+  const db = await initDatabase();
+  try {
+    const note = await db.select(
+      'SELECT created_at FROM nurse_notes WHERE id = ?',
+      [noteId]
+    );
+
+    if (!note || note.length === 0) {
+      return { canEdit: false, reason: 'Nota no encontrada' };
+    }
+
+    const createdTime = new Date(note[0].created_at).getTime();
+    const nowTime = new Date().getTime();
+    const hoursDiff = (nowTime - createdTime) / (1000 * 60 * 60);
+
+    if (hoursDiff > 24) {
+      return {
+        canEdit: false,
+        reason: '❌ Nota tiene más de 24 horas. No se puede editar (NOM-004)',
+        hoursDiff: Math.round(hoursDiff)
+      };
+    }
+
+    return {
+      canEdit: true,
+      hoursRemaining: Math.round(24 - hoursDiff)
+    };
+  } catch (error) {
+    console.error('Error validando tiempo de edición:', error);
+    return { canEdit: false, reason: 'Error en validación' };
+  }
+}
+
+/**
+ * 8. REQUISITO DE ALTA MÉDICA
+ * No cerrar cuenta sin orden del médico
+ */
+export async function validateDischargeRequirement(patientId) {
+  const db = await initDatabase();
+  try {
+    const dischargeOrder = await db.select(`
+      SELECT * FROM discharge_orders
+      WHERE patient_id = ? AND status = 'active'
+    `, [patientId]);
+
+    if (!dischargeOrder || dischargeOrder.length === 0) {
+      return {
+        canDischarge: false,
+        reason: '❌ Requiere orden de alta del médico responsable',
+        requiresPhysicianOrder: true
+      };
+    }
+
+    return {
+      canDischarge: true,
+      order: dischargeOrder[0]
+    };
+  } catch (error) {
+    console.error('Error validando alta médica:', error);
+    return { canDischarge: false, reason: 'Error en validación' };
+  }
+}
+
+/**
+ * 9. CLASIFICACIÓN DE TRIAJE (OBLIGATORIO)
+ * Verifica que color/nivel de urgencia esté asignado
+ */
+export async function validateTriageRequired(patientData) {
+  const validation = {
+    valid: true,
+    errors: []
+  };
+
+  if (!patientData.triage_level) {
+    validation.valid = false;
+    validation.errors.push('❌ OBLIGATORIO: Debes asignar un nivel de triaje (ROJO/NARANJA/AMARILLO/VERDE)');
+  }
+
+  const validTriageLevels = ['red', 'orange', 'yellow', 'green', 'ROJO', 'NARANJA', 'AMARILLO', 'VERDE'];
+  if (patientData.triage_level && !validTriageLevels.includes(patientData.triage_level)) {
+    validation.valid = false;
+    validation.errors.push(`❌ Triaje inválido: ${patientData.triage_level}. Use ROJO/NARANJA/AMARILLO/VERDE`);
+  }
+
+  return validation;
+}
+
+/**
+ * 10. STOCK DE MEDICAMENTOS
+ * No permitir dispensar si no hay inventario
+ */
+export async function validateMedicationStock(medicationId, quantity) {
+  const db = await initDatabase();
+  try {
+    const medication = await db.select(`
+      SELECT quantity_available FROM pharmacy_inventory
+      WHERE id = ?
+    `, [medicationId]);
+
+    if (!medication || medication.length === 0) {
+      return {
+        hasStock: false,
+        reason: 'Medicamento no encontrado en inventario'
+      };
+    }
+
+    if (medication[0].quantity_available < quantity) {
+      return {
+        hasStock: false,
+        reason: `❌ Stock insuficiente. Disponible: ${medication[0].quantity_available}, Solicitado: ${quantity}`,
+        available: medication[0].quantity_available,
+        required: quantity
+      };
+    }
+
+    return {
+      hasStock: true,
+      available: medication[0].quantity_available
+    };
+  } catch (error) {
+    console.error('Error validando stock:', error);
+    return { hasStock: false, reason: 'Error en validación de stock' };
   }
 }

@@ -54,25 +54,14 @@ export function EditableNoteCard({ note, onEdit, onDelete, currentUser }) {
   };
 
   const handleDeleteClick = async () => {
-    if (!isEditable) {
-      alert(getEditLockMessage(editStatus));
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `¿Está seguro de eliminar esta nota?\n\n` +
-      `"${note.note.substring(0, 100)}${note.note.length > 100 ? '...' : ''}"\n\n` +
-      `Esta acción no se puede deshacer.`
+    // ❌ PROHIBIDO: No permitir eliminación de notas (NOM-004)
+    alert(
+      '❌ PROHIBIDO: No se pueden eliminar notas médicas\n\n' +
+      'De acuerdo con NOM-004-SSA3-2012, todas las notas son permanentes ' +
+      'e inmutables para garantizar trazabilidad legal.\n\n' +
+      '✓ Opción: Puedes ARCHIVAR notas antiguas dentro de 24 horas de su creación.'
     );
-
-    if (!confirmed) return;
-
-    try {
-      await onDelete(note.id);
-      alert('✅ Nota eliminada correctamente');
-    } catch (err) {
-      alert(`❌ Error al eliminar: ${err.message}`);
-    }
+    return;
   };
 
   return (

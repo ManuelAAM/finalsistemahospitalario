@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserPlus, Activity, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { validateCURP, extractCURPInfo, formatCURP, getCURPErrorMessage } from '../utils/curpValidation';
 import { validateTriageRequired } from '../utils/triageValidation';
+import { validatePatientUniqueness, validateTriageRequired as validateTriageBD } from '../services/database';
 import TriageSelector from './TriageSelector';
 import { invoke } from '@tauri-apps/api/tauri';
 
@@ -59,6 +60,21 @@ export default function PatientRegistrationForm({ isOpen, onPatientAdded, onClos
     e.preventDefault();
     setError('');
 
+    // --- NUEVAS VALIDACIONES ---
+    const requiredFields = [
+      { field: formData.name, msg: 'El nombre es obligatorio' },
+      { field: formData.curp, msg: 'El CURP es obligatorio' },
+      { field: formData.age, msg: 'La edad es obligatoria' },
+      { field: formData.triage_symptoms, msg: 'Debe describir los síntomas' } // Si aplica
+    ];
+
+    for (const check of requiredFields) {
+      if (!check.field || check.field.toString().trim() === '') {
+        setError(`⚠️ ${check.msg}`);
+        return; // Detiene el envío
+      }
+    }
+
     // Validaciones
     if (!formData.name.trim()) {
       const { formatMessage } = await import('../utils/systemMessages.js');
@@ -104,7 +120,20 @@ export default function PatientRegistrationForm({ isOpen, onPatientAdded, onClos
     setIsSubmitting(true);
 
     try {
-      const { addPatient } = await import('../services/database.js');
+      const { addPatient, validatePatientUniqueness } = await import('../services/database.js');
+      
+      // Validación 6: Verificar unicidad de CURP
+      try {
+        const uniquenessCheck = await validatePatientUniqueness(formData.curp);
+        if (!uniquenessCheck.unique) {
+          setError(`❌ ${uniquenessCheck.message}\n\nEste CURP ya existe en el sistema. Verifique los datos del paciente.`);
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (uniqueError) {
+        console.warn('Advertencia en validación CURP:', uniqueError);
+        // Continuar aún si hay error en validación (base de datos puede estar vacía)
+      }
       
       // Agregar timestamp de triaje y evaluador
       const patientData = {
