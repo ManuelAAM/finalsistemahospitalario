@@ -181,16 +181,15 @@ function ReportForm({ report, patients, onPatientToggle, onFieldChange, onSave }
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-hospital-500 mb-1 block">Turno</label>
-              <select
-                className="w-full p-3 bg-hospital-50 border border-hospital-200 rounded-xl font-medium outline-none focus:border-blue-500 transition"
-                value={report.shiftType}
-                onChange={(e) => onFieldChange('shiftType', e.target.value)}
-              >
-                <option value="Mañana">☀️ Mañana (07:00 - 15:00)</option>
-                <option value="Tarde">🌤️ Tarde (15:00 - 23:00)</option>
-                <option value="Noche">🌙 Noche (23:00 - 07:00)</option>
-              </select>
+              <label className="text-xs font-bold text-hospital-500 mb-1 block">Turno Actual</label>
+              <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-xl font-bold text-blue-700">
+                {(() => {
+                  const hour = new Date().getHours();
+                  if (hour >= 7 && hour < 15) return '☀️ Mañana (07:00 - 15:00)';
+                  if (hour >= 15 && hour < 23) return '🌤️ Tarde (15:00 - 23:00)';
+                  return '🌙 Noche (23:00 - 07:00)';
+                })()}
+              </div>
             </div>
 
             <div>

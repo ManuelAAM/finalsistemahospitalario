@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Package, Plus, AlertTriangle, Search, Filter, TrendingDown, 
-  Calendar, DollarSign, X, Edit, Save, RefreshCw, Activity,
-  AlertCircle, CheckCircle, Clock, Pill
+  Calendar, X, RefreshCw, Activity,
+  AlertCircle, CheckCircle, Clock
 } from 'lucide-react';
 import {
   getStockLevel,
@@ -22,10 +22,7 @@ export default function MedicationStockManager({ isOpen, onClose }) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLevel, setFilterLevel] = useState('ALL');
-  const [showAddModal, setShowAddModal] = useState(false);
   const [stats, setStats] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [editStock, setEditStock] = useState('');
 
   // Cargar inventario
   useEffect(() => {
@@ -39,11 +36,57 @@ export default function MedicationStockManager({ isOpen, onClose }) {
       setLoading(true);
       const { getMedicationInventory } = await import('../services/database.js');
       const data = await getMedicationInventory();
+      console.log('📦 Inventario cargado:', data.length, 'medicamentos');
       setInventory(data);
       setStats(getInventoryStatistics(data));
     } catch (error) {
       console.error('Error cargando inventario:', error);
       alert('Error al cargar inventario de medicamentos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeedInventory = async () => {
+    if (!confirm('¿Deseas poblar el inventario con medicamentos de ejemplo?\n\nEsto agregará 10 medicamentos básicos.')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const { getDb } = await import('../services/database.js');
+      const db = getDb();
+      
+      const now = new Date().toISOString();
+      const meds = [
+        ['Paracetamol 500mg', 'Paracetamol', 'Tabletas', '500mg', 'ANALGESICO', 0, 500, 'tabletas', 100, 1000, 2.50, 'Distribuidora Farmacéutica México', 'Farmacia Principal - Estante A1'],
+        ['Ibuprofeno 400mg', 'Ibuprofeno', 'Tabletas', '400mg', 'AINE', 0, 300, 'tabletas', 80, 500, 3.00, 'Distribuidora Farmacéutica México', 'Farmacia Principal - Estante A2'],
+        ['Amoxicilina 500mg', 'Amoxicilina', 'Cápsulas', '500mg', 'ANTIBIOTICO', 0, 200, 'cápsulas', 50, 400, 5.50, 'Laboratorios Farma', 'Farmacia Principal - Estante B1'],
+        ['Omeprazol 20mg', 'Omeprazol', 'Cápsulas', '20mg', 'GASTROPROTECTOR', 0, 150, 'cápsulas', 40, 300, 4.00, 'Laboratorios Farma', 'Farmacia Principal - Estante C1'],
+        ['Metformina 850mg', 'Metformina', 'Tabletas', '850mg', 'ANTIDIABETICO', 0, 400, 'tabletas', 100, 600, 3.50, 'Distribuidora Farmacéutica México', 'Farmacia Principal - Estante D1'],
+        ['Losartán 50mg', 'Losartán', 'Tabletas', '50mg', 'ANTIHIPERTENSIVO', 0, 250, 'tabletas', 60, 400, 4.50, 'Laboratorios Farma', 'Farmacia Principal - Estante D2'],
+        ['Morfina 10mg/ml', 'Morfina', 'Ampolletas', '10mg/ml', 'OPIOIDE', 1, 50, 'ampolletas', 10, 100, 25.00, 'Distribuidora Especializada', 'Farmacia - Estante Controlados E1'],
+        ['Solución Salina 0.9% 1000ml', 'Cloruro de Sodio', 'Bolsa IV', '0.9%', 'SOLUCIONES', 0, 100, 'bolsas', 30, 200, 15.00, 'Distribuidora Farmacéutica México', 'Almacén - Área de Soluciones'],
+        ['Insulina Glargina 100UI/ml', 'Insulina Glargina', 'Pluma precargada', '100UI/ml', 'ANTIDIABETICO', 0, 30, 'plumas', 10, 50, 450.00, 'Laboratorios Especializados', 'Farmacia - Refrigerador R1'],
+        ['Diclofenaco 75mg/3ml', 'Diclofenaco', 'Ampolletas', '75mg/3ml', 'AINE', 0, 80, 'ampolletas', 20, 150, 8.00, 'Distribuidora Farmacéutica México', 'Farmacia Principal - Estante A3']
+      ];
+      
+      for (const m of meds) {
+        await db.execute(
+          `INSERT INTO medication_inventory (
+            name, active_ingredient, presentation, concentration, category,
+            is_controlled, quantity, unit, min_stock, max_stock, unit_price,
+            supplier, location, storage_conditions, last_restocked, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], 'Temperatura ambiente (15-30°C)', now, now, now]
+        );
+      }
+      
+      alert(`✅ Se agregaron ${meds.length} medicamentos al inventario`);
+      await loadInventory();
+    } catch (error) {
+      console.error('Error poblando inventario:', error);
+      alert('Error al poblar inventario: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -65,19 +108,6 @@ export default function MedicationStockManager({ isOpen, onClose }) {
 
     return filtered;
   }, [inventory, searchTerm, filterLevel]);
-
-  const handleUpdateStock = async (medicationId, newQuantity) => {
-    try {
-      const { updateMedicationStock } = await import('../services/database.js');
-      await updateMedicationStock(medicationId, parseInt(newQuantity));
-      await loadInventory();
-      setEditingId(null);
-      setEditStock('');
-    } catch (error) {
-      console.error('Error actualizando stock:', error);
-      alert('Error al actualizar stock');
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -112,30 +142,6 @@ export default function MedicationStockManager({ isOpen, onClose }) {
                 value={stats.total}
                 icon={Package}
                 color="blue"
-              />
-              <StatCard
-                label="Stock Crítico"
-                value={stats.critical}
-                icon={AlertTriangle}
-                color="red"
-              />
-              <StatCard
-                label="Stock Bajo"
-                value={stats.low}
-                icon={TrendingDown}
-                color="yellow"
-              />
-              <StatCard
-                label="Próximos a Vencer"
-                value={stats.nearExpiration}
-                icon={Calendar}
-                color="orange"
-              />
-              <StatCard
-                label="Valor Total"
-                value={`$${stats.totalValue.toLocaleString()}`}
-                icon={DollarSign}
-                color="green"
               />
             </div>
           )}
@@ -182,14 +188,6 @@ export default function MedicationStockManager({ isOpen, onClose }) {
               <RefreshCw size={18} />
               Actualizar
             </button>
-
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition flex items-center gap-2 shadow-lg"
-            >
-              <Plus size={18} />
-              Nuevo Medicamento
-            </button>
           </div>
         </div>
 
@@ -205,10 +203,21 @@ export default function MedicationStockManager({ isOpen, onClose }) {
           ) : filteredInventory.length === 0 ? (
             <div className="text-center py-20">
               <Package size={64} className="text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 font-bold text-lg">No se encontraron medicamentos</p>
-              <p className="text-gray-400 text-sm mt-2">
-                {searchTerm ? 'Intenta con otros términos de búsqueda' : 'Agrega el primer medicamento al inventario'}
+              <p className="text-gray-500 font-bold text-lg">
+                {inventory.length === 0 ? 'El inventario está vacío' : 'No se encontraron medicamentos'}
               </p>
+              <p className="text-gray-400 text-sm mt-2">
+                {searchTerm ? 'Intenta con otros términos de búsqueda' : 'Agrega medicamentos al inventario'}
+              </p>
+              {inventory.length === 0 && (
+                <button
+                  onClick={handleSeedInventory}
+                  className="mt-6 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition flex items-center gap-2 mx-auto shadow-lg"
+                >
+                  <Plus size={20} />
+                  Poblar con Medicamentos de Ejemplo
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -233,19 +242,12 @@ export default function MedicationStockManager({ isOpen, onClose }) {
                     <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
                       Vencimiento
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
-                      Precio
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
-                      Acciones
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredInventory.map((item) => {
                     const level = getStockLevel(item.quantity);
                     const levelInfo = getStockLevelInfo(level);
-                    const isEditing = editingId === item.id;
 
                     return (
                       <tr key={item.id} className="hover:bg-gray-50 transition">
@@ -269,19 +271,9 @@ export default function MedicationStockManager({ isOpen, onClose }) {
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editStock}
-                              onChange={(e) => setEditStock(e.target.value)}
-                              className="w-20 px-2 py-1 border-2 border-blue-500 rounded text-center font-bold"
-                              autoFocus
-                            />
-                          ) : (
-                            <span className="font-bold text-lg text-gray-800">
-                              {item.quantity}
-                            </span>
-                          )}
+                          <span className="font-bold text-lg text-gray-800">
+                            {item.quantity}
+                          </span>
                           <div className="text-xs text-gray-500 mt-1">{item.unit}</div>
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -309,43 +301,6 @@ export default function MedicationStockManager({ isOpen, onClose }) {
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center text-sm font-bold text-gray-700">
-                          ${item.unit_price?.toFixed(2) || '0.00'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {isEditing ? (
-                            <div className="flex gap-1 justify-center">
-                              <button
-                                onClick={() => handleUpdateStock(item.id, editStock)}
-                                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                                title="Guardar"
-                              >
-                                <Save size={16} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingId(null);
-                                  setEditStock('');
-                                }}
-                                className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                                title="Cancelar"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setEditingId(item.id);
-                                setEditStock(item.quantity.toString());
-                              }}
-                              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                              title="Actualizar Stock"
-                            >
-                              <Edit size={16} />
-                            </button>
-                          )}
-                        </td>
                       </tr>
                     );
                   })}
@@ -363,17 +318,6 @@ export default function MedicationStockManager({ isOpen, onClose }) {
           </p>
         </div>
       </div>
-
-      {/* Modal de Agregar Medicamento */}
-      {showAddModal && (
-        <AddMedicationModal
-          onClose={() => setShowAddModal(false)}
-          onAdded={() => {
-            loadInventory();
-            setShowAddModal(false);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -428,293 +372,5 @@ function ExpirationBadge({ date }) {
       <CheckCircle size={12} />
       {new Date(date).toLocaleDateString()}
     </span>
-  );
-}
-
-// Modal para agregar nuevo medicamento
-function AddMedicationModal({ onClose, onAdded }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    active_ingredient: '',
-    presentation: '',
-    concentration: '',
-    category: 'ESTANDAR',
-    is_controlled: false,
-    quantity: 0,
-    unit: 'unidades',
-    min_stock: 10,
-    max_stock: 100,
-    unit_price: 0,
-    supplier: '',
-    lot_number: '',
-    expiration_date: '',
-    location: 'Farmacia Principal',
-    storage_conditions: 'Temperatura ambiente'
-  });
-
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      const { formatMessage } = await import('../utils/systemMessages.js');
-      alert(formatMessage('ERR_02', 'El nombre del medicamento es obligatorio'));
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const { addMedicationToInventory } = await import('../services/database.js');
-      await addMedicationToInventory(formData);
-      alert('✅ Medicamento agregado al inventario exitosamente');
-      onAdded();
-    } catch (error) {
-      console.error('Error agregando medicamento:', error);
-      alert('Error al agregar medicamento: ' + error.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-white z-10">
-          <div className="flex justify-between items-center">
-            <h3 className="text-2xl font-black text-gray-800 flex items-center gap-2">
-              <Pill size={28} className="text-blue-600" />
-              Agregar Nuevo Medicamento
-            </h3>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-              <X size={24} />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Información básica */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Nombre del Medicamento *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Ingrediente Activo
-              </label>
-              <input
-                type="text"
-                value={formData.active_ingredient}
-                onChange={(e) => setFormData({ ...formData, active_ingredient: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Presentación
-              </label>
-              <input
-                type="text"
-                value={formData.presentation}
-                onChange={(e) => setFormData({ ...formData, presentation: e.target.value })}
-                placeholder="Tabletas, Ampolletas, etc."
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Concentración
-              </label>
-              <input
-                type="text"
-                value={formData.concentration}
-                onChange={(e) => setFormData({ ...formData, concentration: e.target.value })}
-                placeholder="500mg, 10ml, etc."
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Categoría
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              >
-                <option value="ESTANDAR">📦 Estándar</option>
-                <option value="CONTROLADO">⚠️ Controlado</option>
-                <option value="ANTIBIOTICO">💊 Antibiótico</option>
-                <option value="ALTO_RIESGO">🚨 Alto Riesgo</option>
-                <option value="REFRIGERADO">❄️ Refrigerado</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Stock y precios */}
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Cantidad Inicial
-              </label>
-              <input
-                type="number"
-                value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-                min="0"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Stock Mínimo
-              </label>
-              <input
-                type="number"
-                value={formData.min_stock}
-                onChange={(e) => setFormData({ ...formData, min_stock: parseInt(e.target.value) || 0 })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-                min="0"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Stock Máximo
-              </label>
-              <input
-                type="number"
-                value={formData.max_stock}
-                onChange={(e) => setFormData({ ...formData, max_stock: parseInt(e.target.value) || 0 })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-                min="0"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Precio Unitario
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.unit_price}
-                onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-                min="0"
-              />
-            </div>
-          </div>
-
-          {/* Lote y vencimiento */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Número de Lote
-              </label>
-              <input
-                type="text"
-                value={formData.lot_number}
-                onChange={(e) => setFormData({ ...formData, lot_number: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Fecha de Vencimiento
-              </label>
-              <input
-                type="date"
-                value={formData.expiration_date}
-                onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Proveedor
-              </label>
-              <input
-                type="text"
-                value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Ubicación
-              </label>
-              <input
-                type="text"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg"
-              />
-            </div>
-          </div>
-
-          {/* Medicamento controlado */}
-          <div className="flex items-center gap-3 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-            <input
-              type="checkbox"
-              id="controlled"
-              checked={formData.is_controlled}
-              onChange={(e) => setFormData({ ...formData, is_controlled: e.target.checked })}
-              className="w-5 h-5"
-            />
-            <label htmlFor="controlled" className="text-sm font-bold text-yellow-800">
-              ⚠️ Este es un medicamento controlado (requiere seguimiento especial)
-            </label>
-          </div>
-
-          {/* Botones */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {submitting ? (
-                <>
-                  <RefreshCw size={18} className="animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Plus size={18} />
-                  Agregar Medicamento
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   );
 }

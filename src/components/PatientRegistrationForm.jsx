@@ -9,8 +9,11 @@ import { invoke } from '@tauri-apps/api/tauri';
 /**
  * Formulario de Registro de Pacientes con Validación de CURP
  * Previene duplicidad de expedientes médicos
+ * 
+ * IMPORTANTE: Solo médicos y administradores pueden asignar triaje
+ * Los enfermeros NO pueden modificar el triaje de los pacientes
  */
-export default function PatientRegistrationForm({ isOpen, onPatientAdded, onClose }) {
+export default function PatientRegistrationForm({ isOpen, onPatientAdded, onClose, currentUser }) {
   const [formData, setFormData] = useState({
     name: '',
     curp: '',
@@ -101,6 +104,12 @@ export default function PatientRegistrationForm({ isOpen, onPatientAdded, onClos
 
     if (!formData.blood_type) {
       setError('Seleccione un tipo de sangre');
+      return;
+    }
+
+    // Validar que enfermeros NO pueden asignar triaje
+    if (currentUser?.role === 'nurse') {
+      setError('⛔ Los enfermeros NO pueden registrar pacientes con triaje. Esta función está reservada para médicos.');
       return;
     }
 
@@ -392,27 +401,49 @@ export default function PatientRegistrationForm({ isOpen, onPatientAdded, onClos
             />
           </div>
 
-          {/* Clasificación de Triaje - OBLIGATORIO */}
+          {/* Clasificación de Triaje - OBLIGATORIO (SOLO MÉDICOS/ADMINS) */}
           <div className="col-span-full border-t-2 border-gray-200 pt-6 mt-4">
-            <div className="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
-              <div className="flex items-start gap-3">
-                <AlertCircle size={20} className="text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-yellow-800 mb-1">
-                    🚨 Clasificación de Triaje Obligatoria
-                  </p>
-                  <p className="text-xs text-yellow-700">
-                    Todos los pacientes deben ser clasificados según nivel de urgencia al momento del ingreso.
-                  </p>
+            {/* Verificar rol del usuario */}
+            {currentUser?.role === 'nurse' ? (
+              // ENFERMEROS NO PUEDEN ASIGNAR TRIAJE
+              <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800 mb-1">
+                      ⛔ Restricción de Acceso
+                    </p>
+                    <p className="text-xs text-red-700">
+                      Los enfermeros NO pueden asignar o modificar el triaje de los pacientes.
+                      Esta función está reservada para médicos y personal de admisión.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              // MÉDICOS Y ADMINS SÍ PUEDEN ASIGNAR TRIAJE
+              <>
+                <div className="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle size={20} className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-yellow-800 mb-1">
+                        🚨 Clasificación de Triaje Obligatoria
+                      </p>
+                      <p className="text-xs text-yellow-700">
+                        Todos los pacientes deben ser clasificados según nivel de urgencia al momento del ingreso.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-            <TriageSelector
-              value={formData.triage_level}
-              onChange={(level) => setFormData({ ...formData, triage_level: level })}
-              required
-            />
+                <TriageSelector
+                  value={formData.triage_level}
+                  onChange={(level) => setFormData({ ...formData, triage_level: level })}
+                  required
+                />
+              </>
+            )}
           </div>
 
           {/* Síntomas para Triaje */}

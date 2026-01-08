@@ -574,6 +574,17 @@ BEGIN
   SELECT RAISE(ABORT, 'NOM-004 VIOLACIÓN: No se permite eliminar reportes de turno. El expediente clínico debe mantener su integridad completa para garantizar trazabilidad legal.');
 END;
 
+-- Trigger: Impedir modificación del triaje después del registro inicial
+-- Solo médicos y administradores pueden asignar triaje al momento del ingreso
+-- Los enfermeros NO pueden modificar el triaje de los pacientes
+CREATE TRIGGER IF NOT EXISTS prevent_triage_modification
+BEFORE UPDATE OF triage_level ON patients
+FOR EACH ROW
+WHEN OLD.triage_level IS NOT NULL
+BEGIN
+  SELECT RAISE(ABORT, 'RESTRICCIÓN DE TRIAJE: El nivel de triaje NO puede ser modificado después del registro inicial. Solo se puede asignar al momento del ingreso por médicos o personal de admisión.');
+END;
+
 -- ============================================================
 -- NOTA IMPORTANTE: SOFT DELETE (Eliminación Lógica)
 -- ============================================================

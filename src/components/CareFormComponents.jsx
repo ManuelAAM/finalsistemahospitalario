@@ -161,14 +161,29 @@ VitalSignsForm.displayName = 'VitalSignsForm';
  */
 export const MedicationForm = memo(({ 
   selectedPatient,
+  patientTreatments = [],
   onSubmit 
 }) => {
   const [medication, setMedication] = useState({
     medication: '',
     dose: '',
     frequency: '',
-    quantity: 1
+    quantity: 1,
+    applicationDate: '',
+    applicationTime: ''
   });
+  
+  // Establecer fecha y hora actual por defecto
+  useEffect(() => {
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const time = now.toTimeString().slice(0, 5);
+    setMedication(prev => ({
+      ...prev,
+      applicationDate: prev.applicationDate || date,
+      applicationTime: prev.applicationTime || time
+    }));
+  }, []);
   const [stockInfo, setStockInfo] = useState(null);
   const [checkingStock, setCheckingStock] = useState(false);
 
@@ -251,8 +266,11 @@ export const MedicationForm = memo(({
       // Llamar al callback original
       await onSubmit(medication);
       
-      // Limpiar formulario
-      setMedication({ medication: '', dose: '', frequency: '', quantity: 1 });
+      // Limpiar formulario y establecer nueva fecha/hora
+      const now = new Date();
+      const date = now.toISOString().split('T')[0];
+      const time = now.toTimeString().slice(0, 5);
+      setMedication({ medication: '', dose: '', frequency: '', quantity: 1, applicationDate: date, applicationTime: time });
       setStockInfo(null);
       
       alert(`✅ Medicamento dispensado exitosamente\n\nStock restante: ${result.newStock} unidades`);
@@ -280,13 +298,41 @@ export const MedicationForm = memo(({
           </p>
         </div>
 
-        <input 
-          type="text" 
-          placeholder="Nombre del Fármaco" 
-          className="w-full p-3 bg-hospital-50 border border-hospital-200 rounded-xl font-medium outline-none focus:border-emerald-500 transition"
-          value={medication.medication} 
-          onChange={e => handleChange('medication', e.target.value)} 
-        />
+        {/* Select de medicamentos del tratamiento asignado */}
+        <div className="space-y-2">
+          <select 
+            className="w-full p-3 bg-hospital-50 border border-hospital-200 rounded-xl font-medium outline-none focus:border-emerald-500 transition"
+            value={medication.medication} 
+            onChange={e => handleChange('medication', e.target.value)}
+            required
+          >
+            <option value="">-- Seleccionar medicamento del tratamiento --</option>
+            {patientTreatments.map((treatment, index) => (
+              <option 
+                key={`${treatment.id || index}-${treatment.medication}`} 
+                value={treatment.medication}
+              >
+                {treatment.medication} ({treatment.dose})
+              </option>
+            ))}
+          </select>
+          
+          {patientTreatments.length === 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm font-bold text-amber-800">⚠️ Sin tratamientos asignados</p>
+              <p className="text-xs text-amber-700">Este paciente no tiene medicamentos prescritos por el médico.</p>
+            </div>
+          )}
+          
+          {patientTreatments.length > 0 && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-bold text-blue-800">ℹ️ Medicamentos autorizados</p>
+              <p className="text-xs text-blue-700">
+                Solo puedes administrar los {patientTreatments.length} medicamento(s) prescritos por el médico tratante.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Indicador de stock en tiempo real */}
         {checkingStock && (
@@ -335,6 +381,29 @@ export const MedicationForm = memo(({
           />
         </div>
         
+        {/* Fecha y Hora de Aplicación */}
+        <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+          <label className="text-xs font-bold text-blue-800 mb-2 block">📅 Fecha y Hora de Aplicación</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <input 
+                type="date" 
+                className="w-full p-2.5 bg-white border border-blue-200 rounded-lg font-medium outline-none focus:border-emerald-500 transition text-sm"
+                value={medication.applicationDate} 
+                onChange={e => handleChange('applicationDate', e.target.value)} 
+              />
+            </div>
+            <div>
+              <input 
+                type="time" 
+                className="w-full p-2.5 bg-white border border-blue-200 rounded-lg font-medium outline-none focus:border-emerald-500 transition text-sm"
+                value={medication.applicationTime} 
+                onChange={e => handleChange('applicationTime', e.target.value)} 
+              />
+            </div>
+          </div>
+        </div>
+        
         <button 
           type="submit" 
           disabled={stockInfo && !stockInfo.canDispense}
@@ -347,6 +416,7 @@ export const MedicationForm = memo(({
   );
 }, (prevProps, nextProps) => {
   return (prevProps.selectedPatient?.id === nextProps.selectedPatient?.id &&
+          prevProps.patientTreatments?.length === nextProps.patientTreatments?.length &&
           prevProps.onSubmit === nextProps.onSubmit);
 });
 
@@ -534,6 +604,7 @@ NonPharmaForm.displayName = 'NonPharmaForm';
  */
 export const CareFormGroup = memo(({
   selectedPatient,
+  patientTreatments = [],
   onVitalSubmit,
   onMedicationSubmit,
   onNoteSubmit,
@@ -583,6 +654,7 @@ export const CareFormGroup = memo(({
         <MedicationFormWithRef
           ref={medicationFormRef}
           selectedPatient={selectedPatient}
+          patientTreatments={patientTreatments}
           onSubmit={onMedicationSubmit}
         />
 
@@ -715,6 +787,7 @@ VitalSignsFormWithRef.displayName = 'VitalSignsFormWithRef';
  */
 const MedicationFormWithRef = memo(React.forwardRef(({
   selectedPatient,
+  patientTreatments = [],
   onSubmit
 }, ref) => {
   const [medication, setMedication] = useState({
@@ -762,13 +835,30 @@ const MedicationFormWithRef = memo(React.forwardRef(({
         <h3 className="font-bold text-hospital-800">Medicamentos</h3>
       </div>
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
-        <input 
-          type="text" 
-          placeholder="Nombre del Fármaco" 
+        {/* Select de medicamentos del tratamiento asignado */}
+        <select 
           className="w-full p-3 bg-hospital-50 border border-hospital-200 rounded-xl font-medium outline-none focus:border-emerald-500 transition"
           value={medication.medication} 
-          onChange={e => handleChange('medication', e.target.value)} 
-        />
+          onChange={e => handleChange('medication', e.target.value)}
+          required
+        >
+          <option value="">-- Seleccionar medicamento del tratamiento --</option>
+          {patientTreatments.map((treatment, index) => (
+            <option 
+              key={`${treatment.id || index}-${treatment.medication}`} 
+              value={treatment.medication}
+            >
+              {treatment.medication} ({treatment.dose})
+            </option>
+          ))}
+        </select>
+        
+        {patientTreatments.length === 0 && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-center">
+            <p className="text-sm font-bold text-amber-800">⚠️ Sin tratamientos asignados</p>
+            <p className="text-xs text-amber-700">Este paciente no tiene medicamentos prescritos por el médico.</p>
+          </div>
+        )}
         <div className="flex gap-3">
           <input 
             type="text" 
@@ -796,6 +886,7 @@ const MedicationFormWithRef = memo(React.forwardRef(({
   );
 }), (prevProps, nextProps) => {
   return (prevProps.selectedPatient?.id === nextProps.selectedPatient?.id &&
+          prevProps.patientTreatments?.length === nextProps.patientTreatments?.length &&
           prevProps.onSubmit === nextProps.onSubmit);
 });
 

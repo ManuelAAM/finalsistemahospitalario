@@ -73,8 +73,8 @@ const NurseDashboard = ({ user, onLogout }) => {
   // Hooks de Base de Datos con filtrado por enfermero
   const { patients, updatePatient, loading: patientsLoading } = usePatients({
     nurseId: user.id,
-    role: user.role,
-    shift: currentShift
+    role: user.role
+    // NO filtrar por turno - mostrar todos los pacientes asignados
   });
   const { appointments } = useAppointments();
   const { treatments, addTreatment: addTreatmentDB } = useTreatments();
@@ -134,22 +134,31 @@ const NurseDashboard = ({ user, onLogout }) => {
       return;
     }
     
-    const now = new Date();
     try {
       console.log('💊 Guardando medicamento...', med);
+      
+      // Crear fecha y hora de aplicación
+      let applicationDateTime = '';
+      if (med.applicationDate && med.applicationTime) {
+        applicationDateTime = `${med.applicationDate} ${med.applicationTime}`;
+      } else {
+        const now = new Date();
+        applicationDateTime = now.toLocaleString('es-MX');
+      }
+      
       await addTreatmentDB({
         patientId: parseInt(selectedPatientId),
         medication: med.medication,
         dose: med.dose,
         frequency: med.frequency,
         notes: '',
-        startDate: now.toLocaleDateString('es-MX'),
+        startDate: med.applicationDate || new Date().toLocaleDateString('es-MX'),
         appliedBy: user.name,
-        lastApplication: now.toLocaleString('es-MX'),
+        lastApplication: applicationDateTime,
       });
       console.log('✅ Medicamento guardado correctamente');
       const { formatMessage } = await import('./utils/systemMessages.js');
-      alert(formatMessage('MSG_05', `${med.medication} - Dosis: ${med.dose} - Frecuencia: ${med.frequency}`));
+      alert(formatMessage('MSG_05', `${med.medication} - Dosis: ${med.dose}\n📅 Aplicado: ${applicationDateTime}`));
     } catch (error) { 
       console.error('❌ Error al guardar medicamento:', error);
       alert("❌ Error al registrar medicamento: " + (error.message || error)); 
@@ -212,7 +221,7 @@ const NurseDashboard = ({ user, onLogout }) => {
         treatment.materials || '',
         treatment.duration ? `Duración: ${treatment.duration}` : '',
         'Completado',
-        'active'
+        'Completado'
       ]);
       console.log('✅ Tratamiento guardado correctamente');
       alert(`✅ Tratamiento registrado: ${treatment.treatmentType}\n${treatment.description}`);
@@ -309,7 +318,7 @@ const NurseDashboard = ({ user, onLogout }) => {
                 🔒 Vista Filtrada por Asignación
               </p>
               <p className="text-xs text-blue-700">
-                Solo visualizas los <strong>{patients.length} paciente(s)</strong> asignados a tu turno <strong>{currentShift}</strong>.
+                Visualizas <strong>{patients.length} paciente(s)</strong> asignados a ti en todos tus turnos.
                 Los demás pacientes del hospital están protegidos por privacidad de asignación.
               </p>
             </div>
@@ -319,7 +328,7 @@ const NurseDashboard = ({ user, onLogout }) => {
       
       {/* Tarjetas de Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Pacientes Asignados" value={patients.length} icon={Users} colorName="blue" subtext={`Turno ${currentShift}`} />
+        <StatCard title="Pacientes Asignados" value={patients.length} icon={Users} colorName="blue" subtext="Todos tus turnos" />
         <StatCard title="Críticos" value={patients.filter(p => p.condition === 'Crítico').length} icon={AlertCircle} colorName="red" subtext="Atención Inmediata" />
         <StatCard title="Medicamentos" value={treatments.length} icon={Pill} colorName="emerald" subtext="Activos hoy" />
         <StatCard title="Citas" value={appointments.length} icon={Calendar} colorName="purple" subtext="Programadas" />
@@ -384,13 +393,6 @@ const NurseDashboard = ({ user, onLogout }) => {
             <Users size={20} className="text-clinical-primary" />
             Directorio de Pacientes Asignados (ECU-03)
         </h3>
-        <button
-          onClick={() => setPatientRegModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-sm"
-        >
-          <UserPlus size={18} />
-          Nuevo Paciente
-        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
@@ -399,17 +401,23 @@ const NurseDashboard = ({ user, onLogout }) => {
               <th className="px-6 py-4">Paciente</th>
               <th className="px-6 py-4">Triaje</th>
               <th className="px-6 py-4">Ubicación</th>
-              <th className="px-6 py-4">Diagnóstico</th>
+              <th className="px-6 py-4">Médico / Tratamiento</th>
               <th className="px-6 py-4">Estado</th>
               <th className="px-6 py-4 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-hospital-100">
-            {patients.map((patient) => (
+            {patients.map((patient) => {
+              const patientTreatments = treatments.filter(t => t.patient_id === patient.id || t.patientId === patient.id);
+              const activeTreatment = patientTreatments.find(t => t.status === 'Activo') || patientTreatments[0];
+              
+              return (
               <tr key={patient.id} className="hover:bg-blue-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="font-bold text-hospital-900">{patient.name}</div>
                   <div className="text-xs text-hospital-500">{patient.age} años | {patient.bloodType}</div>
+                  {patient.diagnosis && <div className="text-xs text-hospital-600 mt-1">{patient.diagnosis}</div>}
+                  {patient.allergies && <div className="text-xs text-red-500 font-bold mt-1">⚠️ {patient.allergies}</div>}
                 </td>
                 <td className="px-6 py-4">
                   <TriageBadge 
@@ -423,9 +431,24 @@ const NurseDashboard = ({ user, onLogout }) => {
                     <Building2 size={16} className="text-hospital-400"/> {patient.room}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-hospital-600">
-                  {patient.diagnosis || 'En valoración'}
-                  {patient.allergies && <div className="text-xs text-red-500 font-bold mt-1">⚠️ {patient.allergies}</div>}
+                <td className="px-6 py-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <User size={14} className="text-blue-500"/>
+                      <span className="font-bold text-hospital-800">
+                        {patient.primary_doctor || activeTreatment?.responsible_doctor || 'Sin asignar'}
+                      </span>
+                    </div>
+                    {activeTreatment && (
+                      <div className="flex items-center gap-1.5 text-xs text-hospital-600">
+                        <Pill size={12} className="text-emerald-500"/>
+                        <span>{activeTreatment.medication} • {activeTreatment.dose}</span>
+                      </div>
+                    )}
+                    {!activeTreatment && (
+                      <div className="text-xs text-hospital-400 italic">Sin tratamiento activo</div>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold border 
@@ -460,7 +483,7 @@ const NurseDashboard = ({ user, onLogout }) => {
                   </div>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
@@ -554,6 +577,7 @@ const NurseDashboard = ({ user, onLogout }) => {
         <div className="xl:col-span-2">
           <CareFormGroup 
             selectedPatient={selectedPatient}
+            patientTreatments={treatments.filter(t => t.patient_id === selectedPatient.id || t.patientId === selectedPatient.id)}
             onVitalSubmit={handleVitalSubmit}
             onMedicationSubmit={handleMedicationSubmit}
             onNoteSubmit={handleNoteSubmit}
@@ -598,7 +622,7 @@ const NurseDashboard = ({ user, onLogout }) => {
           ].map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={item.onClick || (() => setActiveTab(item.id))}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
                 activeTab === item.id 
                   ? 'bg-clinical-primary text-white shadow-lg shadow-clinical-primary/20 translate-x-1' 
@@ -844,6 +868,7 @@ const NurseDashboard = ({ user, onLogout }) => {
       <PatientRegistrationForm
         isOpen={patientRegModalOpen}
         onClose={() => setPatientRegModalOpen(false)}
+        currentUser={user}
         onPatientAdded={() => {
           setPatientRegModalOpen(false);
           // Recargar lista de pacientes
